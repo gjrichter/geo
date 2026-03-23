@@ -146,8 +146,8 @@
     }
     .stat-label { color: #6c7086; }
     .stat-val   { color: #cdd6f4; font-weight: 500; }
-    .stat-si    { color: #89b4fa; font-weight: 600; }
-    .stat-no    { color: #f38ba8; font-weight: 600; }
+    .stat-si    { color: #4caf7d; font-weight: 600; }
+    .stat-no    { color: #e05555; font-weight: 600; }
 
     /* ── Tooltip ─────────────────────────────────────────── */
     #tooltip {
@@ -175,8 +175,8 @@
     .tt-row { display: flex; justify-content: space-between; gap: 16px; }
     .tt-lbl { color: #6c7086; }
     .tt-val { color: #cdd6f4; font-weight: 500; }
-    .tt-si  { color: #89b4fa; font-weight: 600; }
-    .tt-no  { color: #f38ba8; font-weight: 600; }
+    .tt-si  { color: #4caf7d; font-weight: 600; }
+    .tt-no  { color: #e05555; font-weight: 600; }
     .tt-bar {
       height: 4px;
       border-radius: 2px;
@@ -184,8 +184,8 @@
       overflow: hidden;
       display: flex;
     }
-    .tt-bar-si { background: #89b4fa; }
-    .tt-bar-no { background: #f38ba8; }
+    .tt-bar-si { background: #4caf7d; }
+    .tt-bar-no { background: #e05555; }
 
     /* ── Loading ─────────────────────────────────────────── */
     #loading {
@@ -215,8 +215,7 @@
 <header>
   <h1>Referendum Costituzionale · 22–23 marzo 2026 · Mappa Bivariata per Comune</h1>
   <div class="subtitle">
-    Asse X: Affluenza &nbsp;·&nbsp; Asse Y: % No &nbsp;·&nbsp;
-    Classi: terzili &nbsp;·&nbsp;
+    Verde = vince Sì &nbsp;·&nbsp; Rosso = vince No &nbsp;·&nbsp; Intensità = Affluenza (terzili) &nbsp;·&nbsp;
     Dati: <a href="https://github.com/ondata/referendum-download" style="color:#585b70">ondata/referendum-download</a>
     &nbsp;·&nbsp; Geometrie: ISTAT 1km
   </div>
@@ -234,11 +233,11 @@
 
   <!-- Legend -->
   <div id="legend">
-    <div class="legend-heading">Classi (terzili)</div>
+    <div class="legend-heading">Legenda</div>
     <div class="legend-body">
-      <div class="legend-y-label">% No ↑ alta</div>
+      <div class="legend-y-label" id="legend-y-label">Vince No ↓</div>
       <div class="legend-right">
-        <canvas id="legend-canvas" width="90" height="90"></canvas>
+        <canvas id="legend-canvas" width="90" height="60"></canvas>
         <div class="legend-x-label">Affluenza alta →</div>
         <div class="legend-arrows"><span>bassa</span><span>alta</span></div>
       </div>
@@ -258,18 +257,13 @@
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
 <script>
-// ── Bivariate palette 3×3 ──────────────────────────────────────────────────
-// COLORS[yClass][xClass]  x = affluenza, y = %No  (0=low, 2=high)
-// Corner semantics:
-//   [0][0] low aff + low No  →  light grey
-//   [0][2] high aff + low No →  blue   (alta partecipazione, vince Sì)
-//   [2][0] low aff + high No →  red    (bassa partecipazione, vince No)
-//   [2][2] high aff + high No → dark   (alta partecipazione, vince No)
-const COLORS = [
-  ['#e8e8e8', '#b0d5df', '#64acbe'],  // yClass 0 – basso %No
-  ['#e4acac', '#ad9ea5', '#627f8c'],  // yClass 1 – medio %No
-  ['#c85a5a', '#985356', '#574249'],  // yClass 2 – alto %No
-];
+// ── Bivariate palette: vincitore × affluenza ──────────────────────────────
+// COLORS_SI[affClass]  verde: basso → alto
+// COLORS_NO[affClass]  rosso: basso → alto
+// affClass 0 = bassa affluenza → colore pallido
+// affClass 2 = alta affluenza  → colore forte
+const COLORS_SI = ['#c8ebd6', '#5cb87a', '#1a6e35'];  // verde pallido → forte
+const COLORS_NO = ['#f9cccc', '#e05555', '#8b0000'];  // rosso pallido → forte
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const parseF = s => parseFloat(String(s).replace(',', '.'));
@@ -324,12 +318,9 @@ Promise.all([
   // National scrutini
   const natScr = scrRaw.find(r => r.livello === 'nazionale' && r.quesito_cod === '1');
 
-  // ── Quantile breaks (terzili) ──
+  // ── Quantile breaks per affluenza (terzili) ──
   const affVals = [...affMap.values()].filter(v => !isNaN(v)).sort(d3.ascending);
-  const noVals  = [...scrMap.values()].map(v => v.perc_no).filter(v => !isNaN(v)).sort(d3.ascending);
-
   const affQ = [d3.quantile(affVals, 1/3), d3.quantile(affVals, 2/3)];
-  const noQ  = [d3.quantile(noVals,  1/3), d3.quantile(noVals,  2/3)];
 
   // ── Render map ─────────────────────────────────────────────────────────
   document.getElementById('loading').style.display = 'none';
@@ -373,11 +364,10 @@ Promise.all([
         const k = d.properties.com_istat_code;
         const aff = affMap.get(k);
         const scr = scrMap.get(k);
-        if (aff == null || scr == null) return null; // fallback to CSS no-data
-        const xC = qClass(aff,        affQ[0], affQ[1]);
-        const yC = qClass(scr.perc_no, noQ[0],  noQ[1]);
-        if (xC == null || yC == null) return null;
-        return COLORS[yC][xC];
+        if (aff == null || scr == null) return null;
+        const affC = qClass(aff, affQ[0], affQ[1]);
+        if (affC == null || isNaN(scr.perc_no) || isNaN(scr.perc_si)) return null;
+        return scr.perc_no >= scr.perc_si ? COLORS_NO[affC] : COLORS_SI[affC];
       })
       .on('mousemove', (event, d) => {
         const k   = d.properties.com_istat_code;
@@ -426,23 +416,30 @@ Promise.all([
       });
 
   // ── Draw legend canvas ─────────────────────────────────────────────────
-  // Canvas: rows top→bottom = %No high→low, cols left→right = aff low→high
+  // 3 cols (affluenza bassa→alta) × 2 rows (Sì top, No bottom)
   const canvas  = document.getElementById('legend-canvas');
   const ctx     = canvas.getContext('2d');
-  const cellSz  = 30;
-  for (let y = 0; y < 3; y++) {
-    for (let x = 0; x < 3; x++) {
-      ctx.fillStyle = COLORS[2 - y][x]; // flip Y so high No is on top
-      ctx.fillRect(x * cellSz, y * cellSz, cellSz, cellSz);
-    }
+  const cellW   = 30;
+  const cellH   = 30;
+  for (let x = 0; x < 3; x++) {
+    ctx.fillStyle = COLORS_SI[x];
+    ctx.fillRect(x * cellW, 0, cellW, cellH);
+    ctx.fillStyle = COLORS_NO[x];
+    ctx.fillRect(x * cellW, cellH, cellW, cellH);
   }
-  // Draw subtle grid lines
-  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  // Row labels inside cells
+  ctx.font = 'bold 9px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.textAlign = 'left';
+  ctx.fillText('Sì', 3, 11);
+  ctx.fillText('No', 3, cellH + 11);
+  // Subtle grid lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
   ctx.lineWidth   = 0.5;
   for (let i = 0; i <= 3; i++) {
-    ctx.beginPath(); ctx.moveTo(i * cellSz, 0); ctx.lineTo(i * cellSz, 90); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, i * cellSz); ctx.lineTo(90, i * cellSz); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(i * cellW, 0); ctx.lineTo(i * cellW, 60); ctx.stroke();
   }
+  ctx.beginPath(); ctx.moveTo(0, cellH); ctx.lineTo(90, cellH); ctx.stroke();
 
   // ── Zoom & pan ─────────────────────────────────────────────────────────
   const zoom = d3.zoom()
