@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Referendum 2026 – Mappa Bivariata</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 10px 20px;
+      background: #181825;
+      border-bottom: 1px solid #313244;
+      flex-shrink: 0;
+    }
+    h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #cba6f7;
+      line-height: 1.3;
+    }
+    .subtitle {
+      font-size: 0.72rem;
+      color: #6c7086;
+      margin-top: 3px;
+    }
+
+    #container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .municipality {
+      stroke: #1e1e2e;
+      stroke-width: 0.25;
+      cursor: pointer;
+    }
+    .municipality:hover {
+      stroke: #cdd6f4;
+      stroke-width: 1;
+    }
+    .no-data {
+      fill: #2a2a3d !important;
+      cursor: default;
+    }
+
+    /* ── Legend ─────────────────────────────────────────── */
+    #legend {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(24, 24, 37, 0.93);
+      border: 1px solid #45475a;
+      border-radius: 10px;
+      padding: 14px 16px 12px;
+      display: none;
+    }
+    .legend-heading {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #a6adc8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+    .legend-body {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .legend-y-label {
+      font-size: 0.62rem;
+      color: #6c7086;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      white-space: nowrap;
+      padding-bottom: 2px;
+    }
+    .legend-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    #legend-canvas {
+      display: block;
+      border-radius: 3px;
+    }
+    .legend-x-label {
+      font-size: 0.62rem;
+      color: #6c7086;
+      text-align: right;
+      width: 90px;
+    }
+    .legend-arrows {
+      display: flex;
+      justify-content: space-between;
+      width: 90px;
+      font-size: 0.6rem;
+      color: #585b70;
+      margin-top: 1px;
+    }
+
+    /* ── Stats panel ─────────────────────────────────────── */
+    #stats {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(24, 24, 37, 0.93);
+      border: 1px solid #45475a;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 0.75rem;
+      display: none;
+      line-height: 1.8;
+    }
+    #stats .stat-heading {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #a6adc8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .stat-label { color: #6c7086; }
+    .stat-val   { color: #cdd6f4; font-weight: 500; }
+    .stat-si    { color: #89b4fa; font-weight: 600; }
+    .stat-no    { color: #f38ba8; font-weight: 600; }
+
+    /* ── Tooltip ─────────────────────────────────────────── */
+    #tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(24, 24, 37, 0.97);
+      border: 1px solid #45475a;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      line-height: 1.7;
+      display: none;
+      max-width: 230px;
+      z-index: 100;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #tooltip strong {
+      color: #cba6f7;
+      font-size: 0.88rem;
+      display: block;
+      margin-bottom: 1px;
+    }
+    #tooltip .prov { color: #6c7086; font-size: 0.7rem; }
+    #tooltip hr { border: none; border-top: 1px solid #313244; margin: 6px 0; }
+    .tt-row { display: flex; justify-content: space-between; gap: 16px; }
+    .tt-lbl { color: #6c7086; }
+    .tt-val { color: #cdd6f4; font-weight: 500; }
+    .tt-si  { color: #89b4fa; font-weight: 600; }
+    .tt-no  { color: #f38ba8; font-weight: 600; }
+    .tt-bar {
+      height: 4px;
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+      display: flex;
+    }
+    .tt-bar-si { background: #89b4fa; }
+    .tt-bar-no { background: #f38ba8; }
+
+    /* ── Loading ─────────────────────────────────────────── */
+    #loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      color: #6c7086;
+      font-size: 0.85rem;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #313244;
+      border-top-color: #cba6f7;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Referendum Costituzionale · 22–23 marzo 2026 · Mappa Bivariata per Comune</h1>
+  <div class="subtitle">
+    Asse X: Affluenza &nbsp;·&nbsp; Asse Y: % No &nbsp;·&nbsp;
+    Classi: terzili &nbsp;·&nbsp;
+    Dati: <a href="https://github.com/ondata/referendum-download" style="color:#585b70">ondata/referendum-download</a>
+    &nbsp;·&nbsp; Geometrie: ISTAT 1km
+  </div>
+</header>
+
+<div id="container">
+  <div id="loading">
+    <div class="spinner"></div>
+    Caricamento dati e geometrie…
+  </div>
+
+  <svg id="map"></svg>
+
+  <div id="tooltip"></div>
+
+  <!-- Legend -->
+  <div id="legend">
+    <div class="legend-heading">Classi (terzili)</div>
+    <div class="legend-body">
+      <div class="legend-y-label">% No ↑ alta</div>
+      <div class="legend-right">
+        <canvas id="legend-canvas" width="90" height="90"></canvas>
+        <div class="legend-x-label">Affluenza alta →</div>
+        <div class="legend-arrows"><span>bassa</span><span>alta</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- National stats -->
+  <div id="stats">
+    <div class="stat-heading">Risultato nazionale</div>
+    <div class="stat-row"><span class="stat-label">Affluenza</span><span class="stat-val" id="s-aff">–</span></div>
+    <div class="stat-row"><span class="stat-label">Sì</span><span class="stat-si" id="s-si">–</span></div>
+    <div class="stat-row"><span class="stat-label">No</span><span class="stat-no" id="s-no">–</span></div>
+    <div class="stat-row"><span class="stat-label">Comuni</span><span class="stat-val" id="s-com">–</span></div>
+  </div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+<script>
+// ── Bivariate palette 3×3 ──────────────────────────────────────────────────
+// COLORS[yClass][xClass]  x = affluenza, y = %No  (0=low, 2=high)
+// Corner semantics:
+//   [0][0] low aff + low No  →  light grey
+//   [0][2] high aff + low No →  blue   (alta partecipazione, vince Sì)
+//   [2][0] low aff + high No →  red    (bassa partecipazione, vince No)
+//   [2][2] high aff + high No → dark   (alta partecipazione, vince No)
+const COLORS = [
+  ['#e8e8e8', '#b0d5df', '#64acbe'],  // yClass 0 – basso %No
+  ['#e4acac', '#ad9ea5', '#627f8c'],  // yClass 1 – medio %No
+  ['#c85a5a', '#985356', '#574249'],  // yClass 2 – alto %No
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const parseF = s => parseFloat(String(s).replace(',', '.'));
+
+function qClass(value, q1, q2) {
+  if (value == null || isNaN(value)) return null;
+  if (value <= q1) return 0;
+  if (value <= q2) return 1;
+  return 2;
+}
+
+function fmtPct(v) {
+  return isNaN(v) ? '–' : v.toFixed(2) + '%';
+}
+
+// ── URLs ───────────────────────────────────────────────────────────────────
+const GEO_URL = 'https://raw.githubusercontent.com/gjrichter/geo/main/italy/boundaries/italy_istat_municipalities_4326_1km.topojson';
+const AFF_URL = 'https://raw.githubusercontent.com/ondata/referendum-download/main/data/20260322/affluenza.csv';
+const SCR_URL = 'https://raw.githubusercontent.com/ondata/referendum-download/main/data/20260322/scrutini_flat.csv';
+
+// ── Load ───────────────────────────────────────────────────────────────────
+Promise.all([
+  d3.json(GEO_URL),
+  d3.csv(AFF_URL),
+  d3.csv(SCR_URL),
+]).then(([topo, affRaw, scrRaw]) => {
+
+  // ── Affluenza: only finale (rilevazione=4) at comune level ──
+  const affMap = new Map();
+  affRaw
+    .filter(r => r.livello === 'comune' && r.rilevazione === '4')
+    .forEach(r => affMap.set(r.cod_istat, parseF(r.perc_vot)));
+
+  // National finale
+  const natAff = affRaw.find(r => r.livello === 'nazionale' && r.rilevazione === '4');
+
+  // ── Scrutini: comune level, quesito 1 ──
+  const scrMap = new Map();
+  scrRaw
+    .filter(r => r.livello === 'comune' && r.quesito_cod === '1')
+    .forEach(r => scrMap.set(r.cod_istat, {
+      perc_si:  parseF(r.perc_si),
+      perc_no:  parseF(r.perc_no),
+      voti_si:  +r.voti_si,
+      voti_no:  +r.voti_no,
+      elettori: +r.elettori_t,
+      nome:     r.desc_com,
+      prov:     r.desc_prov,
+      reg:      r.desc_reg,
+    }));
+
+  // National scrutini
+  const natScr = scrRaw.find(r => r.livello === 'nazionale' && r.quesito_cod === '1');
+
+  // ── Quantile breaks (terzili) ──
+  const affVals = [...affMap.values()].filter(v => !isNaN(v)).sort(d3.ascending);
+  const noVals  = [...scrMap.values()].map(v => v.perc_no).filter(v => !isNaN(v)).sort(d3.ascending);
+
+  const affQ = [d3.quantile(affVals, 1/3), d3.quantile(affVals, 2/3)];
+  const noQ  = [d3.quantile(noVals,  1/3), d3.quantile(noVals,  2/3)];
+
+  // ── Render map ─────────────────────────────────────────────────────────
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('legend').style.display  = 'block';
+  document.getElementById('stats').style.display   = 'block';
+
+  // Populate national stats
+  if (natAff) document.getElementById('s-aff').textContent = fmtPct(parseF(natAff.perc_vot));
+  if (natScr) {
+    document.getElementById('s-si').textContent  = fmtPct(parseF(natScr.perc_si));
+    document.getElementById('s-no').textContent  = fmtPct(parseF(natScr.perc_no));
+  }
+  document.getElementById('s-com').textContent = d3.format(',')(scrMap.size);
+
+  const container = document.getElementById('container');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  const topoKey = Object.keys(topo.objects)[0];
+  const geojson = topojson.feature(topo, topo.objects[topoKey]);
+
+  const projection = d3.geoMercator().fitSize([W, H], geojson);
+  const pathGen    = d3.geoPath().projection(projection);
+
+  const svg     = d3.select('#map');
+  const tooltip = document.getElementById('tooltip');
+  const contRect = container.getBoundingClientRect();
+
+  // Main layer
+  const g = svg.append('g');
+
+  g.selectAll('path')
+    .data(geojson.features)
+    .join('path')
+      .attr('class', d => {
+        const k = d.properties.com_istat_code;
+        return (affMap.has(k) && scrMap.has(k)) ? 'municipality' : 'municipality no-data';
+      })
+      .attr('d', pathGen)
+      .attr('fill', d => {
+        const k = d.properties.com_istat_code;
+        const aff = affMap.get(k);
+        const scr = scrMap.get(k);
+        if (aff == null || scr == null) return null; // fallback to CSS no-data
+        const xC = qClass(aff,        affQ[0], affQ[1]);
+        const yC = qClass(scr.perc_no, noQ[0],  noQ[1]);
+        if (xC == null || yC == null) return null;
+        return COLORS[yC][xC];
+      })
+      .on('mousemove', (event, d) => {
+        const k   = d.properties.com_istat_code;
+        const aff = affMap.get(k);
+        const scr = scrMap.get(k);
+        const name = scr ? scr.nome : (d.properties.name || k);
+        const prov = scr ? scr.prov : '';
+
+        let html = `<strong>${name}</strong>`;
+        if (prov) html += `<div class="prov">${prov}${scr && scr.reg ? ' · ' + scr.reg : ''}</div>`;
+        html += '<hr>';
+
+        if (aff != null && !isNaN(aff)) {
+          html += `<div class="tt-row"><span class="tt-lbl">Affluenza</span><span class="tt-val">${fmtPct(aff)}</span></div>`;
+        }
+        if (scr) {
+          html += `<div class="tt-row"><span class="tt-lbl">Sì</span><span class="tt-si">${fmtPct(scr.perc_si)}</span></div>`;
+          html += `<div class="tt-row"><span class="tt-lbl">No</span><span class="tt-no">${fmtPct(scr.perc_no)}</span></div>`;
+          if (!isNaN(scr.perc_si) && !isNaN(scr.perc_no)) {
+            const wSi = scr.perc_si.toFixed(1);
+            const wNo = scr.perc_no.toFixed(1);
+            html += `<div class="tt-bar">
+              <div class="tt-bar-si" style="width:${wSi}%"></div>
+              <div class="tt-bar-no" style="width:${wNo}%"></div>
+            </div>`;
+          }
+          if (scr.elettori > 0) {
+            html += `<div class="tt-row" style="margin-top:4px"><span class="tt-lbl">Elettori</span><span class="tt-val">${d3.format(',')(scr.elettori)}</span></div>`;
+          }
+        }
+
+        tooltip.innerHTML = html;
+        tooltip.style.display = 'block';
+
+        const mx = event.clientX - contRect.left;
+        const my = event.clientY - contRect.top;
+        const tw = tooltip.offsetWidth;
+        const th = tooltip.offsetHeight;
+        const tx = mx + 14 + tw > W ? mx - tw - 10 : mx + 14;
+        const ty = Math.max(4, Math.min(my - th / 2, H - th - 4));
+        tooltip.style.left = tx + 'px';
+        tooltip.style.top  = ty + 'px';
+      })
+      .on('mouseleave', () => {
+        tooltip.style.display = 'none';
+      });
+
+  // ── Draw legend canvas ─────────────────────────────────────────────────
+  // Canvas: rows top→bottom = %No high→low, cols left→right = aff low→high
+  const canvas  = document.getElementById('legend-canvas');
+  const ctx     = canvas.getContext('2d');
+  const cellSz  = 30;
+  for (let y = 0; y < 3; y++) {
+    for (let x = 0; x < 3; x++) {
+      ctx.fillStyle = COLORS[2 - y][x]; // flip Y so high No is on top
+      ctx.fillRect(x * cellSz, y * cellSz, cellSz, cellSz);
+    }
+  }
+  // Draw subtle grid lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth   = 0.5;
+  for (let i = 0; i <= 3; i++) {
+    ctx.beginPath(); ctx.moveTo(i * cellSz, 0); ctx.lineTo(i * cellSz, 90); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * cellSz); ctx.lineTo(90, i * cellSz); ctx.stroke();
+  }
+
+  // ── Zoom & pan ─────────────────────────────────────────────────────────
+  const zoom = d3.zoom()
+    .scaleExtent([0.5, 40])
+    .on('zoom', (event) => {
+      g.attr('transform', event.transform);
+      // thin strokes at high zoom
+      const k = event.transform.k;
+      g.selectAll('.municipality').attr('stroke-width', Math.max(0.1, 0.25 / k));
+    });
+  svg.call(zoom);
+
+}).catch(err => {
+  document.getElementById('loading').innerHTML =
+    `<div style="color:#f38ba8;text-align:center">
+      <strong>Errore nel caricamento</strong><br>
+      <small style="color:#6c7086">${err.message}</small>
+    </div>`;
+  console.error(err);
+});
+</script>
+</body>
+</html>
