@@ -89,8 +89,9 @@ convert_layer() {
   echo "  [full]  $base"
   npx mapshaper "$shp" encoding=utf-8 \
     -proj crs=EPSG:4326 \
+    -each "area_km2=Math.round(this.area/1e6*100)/100" \
     -rename-fields "$rename" \
-    -filter-fields "$keep" \
+    -filter-fields "area_km2,$keep" \
     -o format=geojson "${base}.geojson" \
     -o format=topojson "${base}.topojson" 2>&1 | grep -E "^\[o\]|Error" || true
 
@@ -104,6 +105,7 @@ convert_layer() {
     echo "  [${suffix}]  ${base}_${suffix}"
     npx mapshaper "${base}.geojson" \
       -simplify interval=$interval keep-shapes \
+      -each "area_km2=Math.round(this.area/1e6*100)/100" \
       -o format=geojson "${base}_${suffix}.geojson" \
       -o format=topojson "${base}_${suffix}.topojson" 2>&1 | grep -E "^\[o\]|Error" || true
   done
