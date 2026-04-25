@@ -32,7 +32,7 @@ YEARS=()
 for zip in "$SOURCES_DIR"/Limiti0101????_g.zip; do
   [[ -f "$zip" ]] || continue
   fname="$(basename "$zip")"
-  year="${fname#Limiti01012}"
+  year="${fname#Limiti0101}"
   year="${year%_g.zip}"
   if [[ "$year" =~ ^[0-9]{4}$ ]]; then
     YEARS+=("$year")
