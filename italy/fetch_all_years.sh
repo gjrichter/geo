@@ -46,7 +46,8 @@ fi
 
 # Ordina gli anni
 IFS=$'\n' YEARS=($(printf '%s\n' "${YEARS[@]}" | sort)); unset IFS
-LATEST_YEAR="${YEARS[${#YEARS[@]}-1]}"
+n=$((${#YEARS[@]} - 1))
+LATEST_YEAR="${YEARS[$n]}"
 
 echo "Anni trovati: ${YEARS[*]}"
 echo "Anno più recente (latest): $LATEST_YEAR"
